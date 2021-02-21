@@ -1,124 +1,84 @@
-import initCalendar from '../../template/calendar/index';
-import { setTodoLabels } from '../../template/calendar/index';
-const WXAPI = require('../../wxapi/main')
+const WXAPI = require('apifm-wxapi')
+const AUTH = require('../../utils/auth')
 
 Page({
-
-  /**
-   * 页面的初始数据
-   */
   data: {
-
+    minDate: new Date().getTime(),
+    maxDate: new Date().getTime(),
+    formatter(day) {
+      return day;
+    },
   },
-
-  /**
-   * 生命周期函数--监听页面加载
-   */
-  onLoad: function (options) {
-
+  onLoad: function(options) {
+    this.scoreSignLogs()
   },
-
-  /**
-   * 生命周期函数--监听页面初次渲染完成
-   */
-  onReady: function () {
-
-  },
-
-  /**
-   * 生命周期函数--监听页面显示
-   */
-  onShow: function () {
-    initCalendar({
-      afterTapDay: (currentSelect, allSelectedDays) => {
-        // 不是今天，直接 return 
-        const myDate = new Date();
-        // console.log('y:', myDate.getFullYear())
-        // console.log('m:', myDate.getMonth() + 1)
-        // console.log('d:', myDate.getDate())
-        if (myDate.getFullYear() != currentSelect.year ||
-          (myDate.getMonth() + 1) != currentSelect.month ||
-          myDate.getDate() != currentSelect.day) {
-          return
-        }
-        if (currentSelect.hasTodo) {
-          wx.showToast({
-            title: '今天已签到',
-            icon: 'none'
-          })
-          return
-        }
-        WXAPI.scoreSign(wx.getStorageSync('token')).then(r => {
-          wx.showToast({
-            title: '签到成功',
-            icon: 'none'
-          })
-          setTodoLabels({
-            pos: 'bottom',
-            dotColor: '#40',
-            days: [{
-              year: currentSelect.year,
-              month: currentSelect.month,
-              day: currentSelect.day,
-              todoText: '已签到'
-            }],
-          });
-        })
+  onShow: function() {
+    AUTH.checkHasLogined().then(isLogined => {
+      if (!isLogined) {
+        AUTH.openLoginDialog()
       }
-    });
-    WXAPI.scoreSignLogs({
+    })
+  },
+  async scoreSignLogs() {
+    const res = await WXAPI.scoreSignLogs({
       token: wx.getStorageSync('token')
-    }).then(res => {
-      if (res.code == 0) {
-        res.data.result.forEach(ele => {
-          const _data = ele.dateAdd.split(" ")[0]
-          setTodoLabels({
-            pos: 'bottom',
-            dotColor: '#40',
-            days: [{
-              year: parseInt(_data.split("-")[0]),
-              month: parseInt(_data.split("-")[1]),
-              day: parseInt(_data.split("-")[2]),
-              todoText: '已签到'
-            }],
-          });
-        })
-      }
-    })    
+    })
+    if (res.code == 0) {
+      this.setData({
+        scoreSignLogs: res.data.result,
+        formatter(day) {
+          const _log = res.data.result.find(ele => {
+            const year = day.date.getYear() + 1900
+            let month = day.date.getMonth() + 1
+            month = month + ''
+            if (month.length == 1) {
+              month = '0' + month
+            }
+            let date = day.date.getDate() + ''
+            if (date.length == 1) {
+              date = '0' + date
+            }
+            return ele.dateAdd.indexOf(`${year}-${month}-${date}`) == 0
+          })
+          if (_log) {
+            day.bottomInfo = '已签到'
+          }
+          return day;
+        }
+      })
+    }
   },
-
-  /**
-   * 生命周期函数--监听页面隐藏
-   */
-  onHide: function () {
-
+  async sign() {
+    const res = await WXAPI.scoreSign(wx.getStorageSync('token'))
+    if (res.code == 10000) {
+      wx.showToast({
+        title: '签到成功',
+        icon: 'success'
+      })
+      this.scoreSignLogs()
+      return
+    }
+    if (res.code != 0) {
+      wx.showToast({
+        title: res.msg,
+        icon: 'none'
+      })
+    } else {
+      wx.showToast({
+        title: '签到成功',
+        icon: 'success'
+      })
+      this.scoreSignLogs()
+    }
   },
-
-  /**
-   * 生命周期函数--监听页面卸载
-   */
-  onUnload: function () {
-
+  processLogin(e) {
+    if (!e.detail.userInfo) {
+      wx.showToast({
+        title: '已取消',
+        icon: 'none',
+      })
+      return;
+    }
+    AUTH.register(this);
   },
-
-  /**
-   * 页面相关事件处理函数--监听用户下拉动作
-   */
-  onPullDownRefresh: function () {
-
-  },
-
-  /**
-   * 页面上拉触底事件的处理函数
-   */
-  onReachBottom: function () {
-
-  },
-
-  /**
-   * 用户点击右上角分享
-   */
-  onShareAppMessage: function () {
-
-  }
 })

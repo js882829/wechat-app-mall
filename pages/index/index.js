@@ -1,24 +1,23 @@
-const WXAPI = require('../../wxapi/main')
-const CONFIG = require('../../config.js')
-//获取应用实例
-var app = getApp()
+const WXAPI = require('apifm-wxapi')
+const TOOLS = require('../../utils/tools.js')
+const AUTH = require('../../utils/auth')
+
+const APP = getApp()
+// fixed首次打开不显示标题的bug
+APP.configLoadOK = () => {
+  wx.setNavigationBarTitle({
+    title: wx.getStorageSync('mallName')
+  })
+}
+
 Page({
   data: {
-    inputShowed: false, // 是否显示搜索框
     inputVal: "", // 搜索框内容
-    category_box_width: 750, //分类总宽度
     goodsRecommend: [], // 推荐商品
     kanjiaList: [], //砍价商品列表
     pingtuanList: [], //拼团商品列表
-    kanjiaGoodsMap: {}, //砍价商品列表
 
-    indicatorDots: true,
-    autoplay: true,
-    interval: 3000,
-    duration: 1000,
     loadingHidden: false, // loading
-    userInfo: {},
-    swiperCurrent: 0,
     selectCurrent: 0,
     categories: [],
     activeCategoryId: 0,
@@ -35,25 +34,13 @@ Page({
   },
 
   tabClick: function(e) {
-    let offset = e.currentTarget.offsetLeft;
-    if (offset > 150) {
-      offset = offset - 150
-    } else {
-      offset = 0;
-    }
-    this.setData({
-      activeCategoryId: e.currentTarget.id,
-      curPage: 1,
-      cateScrollTop: offset
-    });
-    this.getGoodsList(this.data.activeCategoryId);
-  },
-  //事件处理函数
-  swiperchange: function(e) {
-    //console.log(e.detail.current)
-    this.setData({
-      swiperCurrent: e.detail.current
+    wx.setStorageSync("_categoryId", e.currentTarget.dataset.id)
+    wx.switchTab({
+      url: '/pages/category/category',
     })
+    // wx.navigateTo({
+    //   url: '/pages/goods/list?categoryId=' + e.currentTarget.id,
+    // })
   },
   toDetailsTap: function(e) {
     wx.navigateTo({
@@ -61,9 +48,18 @@ Page({
     })
   },
   tapBanner: function(e) {
-    if (e.currentTarget.dataset.id != 0) {
+    const url = e.currentTarget.dataset.url
+    if (url) {
       wx.navigateTo({
-        url: "/pages/goods-details/index?id=" + e.currentTarget.dataset.id
+        url
+      })
+    }
+  },
+  adClick: function(e) {
+    const url = e.currentTarget.dataset.url
+    if (url) {
+      wx.navigateTo({
+        url
       })
     }
   },
@@ -72,67 +68,31 @@ Page({
       selectCurrent: e.index
     })
   },
-  onLoad: function(e) {   
+  onLoad: function(e) {
     wx.showShareMenu({
       withShareTicket: true
-    }) 
+    })
     const that = this
-    // if (e && e.query && e.query.inviter_id) { 
-    //   wx.setStorageSync('referrer', e.query.inviter_id)
-    // }
+    // 读取分享链接中的邀请人编号
+    if (e && e.inviter_id) {
+      wx.setStorageSync('referrer', e.inviter_id)
+    }
+    // 读取小程序码中的邀请人编号
     if (e && e.scene) {
       const scene = decodeURIComponent(e.scene)
       if (scene) {        
         wx.setStorageSync('referrer', scene.substring(11))
       }
     }
+    // 静默式授权注册/登陆
+    AUTH.authorize().then(res => {
+      TOOLS.showTabBarBadge()
+    })
     wx.setNavigationBarTitle({
       title: wx.getStorageSync('mallName')
     })
-    /**
-     * 示例：
-     * 调用接口封装方法
-     */
-    WXAPI.banners({
-      type: 'new'
-    }).then(function(res) {
-      if (res.code == 700) {
-        wx.showModal({
-          title: '提示',
-          content: '请在后台添加 banner 轮播图片，自定义类型填写 new',
-          showCancel: false
-        })
-      } else {
-        that.setData({
-          banners: res.data
-        });
-      }
-    }).catch(function(e) {
-      wx.showToast({
-        title: res.msg,
-        icon: 'none'
-      })
-    })
-    WXAPI.goodsCategory().then(function(res) {
-      // let categories = [{
-      //   id: 0,
-      //   icon: '/images/fl.png',
-      //   name: "全部"
-      // }];
-      let categories = [];
-      if (res.code == 0) {
-        categories = categories.concat(res.data)
-      }
-      const _n = Math.ceil(categories.length / 2)
-      // const _n = Math.ceil(categories.length)
-      that.setData({
-        categories: categories,
-        category_box_width: 150 * _n,
-        activeCategoryId: 0,
-        curPage: 1
-      });
-      that.getGoodsList(0);
-    })
+    this.initBanners()
+    this.categories()
     WXAPI.goods({
       recommendStatus: 1
     }).then(res => {
@@ -146,6 +106,84 @@ Page({
     that.getNotice()
     that.kanjiaGoods()
     that.pingtuanGoods()
+    this.wxaMpLiveRooms()    
+  },
+  async miaoshaGoods(){
+    const res = await WXAPI.goods({
+      miaosha: true
+    })
+    if (res.code == 0) {
+      res.data.forEach(ele => {
+        const _now = new Date().getTime()
+        if (ele.dateStart) {
+          ele.dateStartInt = new Date(ele.dateStart.replace(/-/g, '/')).getTime() - _now
+        }
+        if (ele.dateEnd) {
+          ele.dateEndInt = new Date(ele.dateEnd.replace(/-/g, '/')).getTime() -_now
+        }
+      })
+      this.setData({
+        miaoshaGoods: res.data
+      })
+    }
+  },
+  async wxaMpLiveRooms(){
+    const res = await WXAPI.wxaMpLiveRooms()
+    if (res.code == 0 && res.data.length > 0) {
+      this.setData({
+        aliveRooms: res.data
+      })
+    }
+  },
+  async initBanners(){
+    const _data = {}
+    // 读取头部轮播图
+    const res1 = await WXAPI.banners({
+      type: 'index'
+    })
+    if (res1.code == 700) {
+      wx.showModal({
+        title: '提示',
+        content: '请在后台添加 banner 轮播图片，自定义类型填写 index',
+        showCancel: false
+      })
+    } else {
+      _data.banners = res1.data
+    }
+    this.setData(_data)
+  },
+  onShow: function(e){
+    this.setData({
+      shopInfo: wx.getStorageSync('shopInfo')
+    })
+    // 获取购物车数据，显示TabBarBadge
+    TOOLS.showTabBarBadge()
+    this.goodsDynamic()
+    this.miaoshaGoods()
+  },
+  async goodsDynamic(){
+    const res = await WXAPI.goodsDynamic(0)
+    if (res.code == 0) {
+      this.setData({
+        goodsDynamic: res.data
+      })
+    }
+  },
+  async categories(){
+    const res = await WXAPI.goodsCategory()
+    let categories = [];
+    if (res.code == 0) {
+      const _categories = res.data.filter(ele => {
+        return ele.level == 1
+      })
+      categories = categories.concat(_categories)
+    }
+    this.setData({
+      categories: categories,
+      activeCategoryId: 0,
+      curPage: 1
+    });
+    this.getGoodsList(0);
   },
   onPageScroll(e) {
     let scrollTop = this.data.scrollTop
@@ -153,43 +191,40 @@ Page({
       scrollTop: e.scrollTop
     })
   },
-  getGoodsList: function(categoryId, append) {
+  async getGoodsList(categoryId, append) {
     if (categoryId == 0) {
       categoryId = "";
     }
-    var that = this;
     wx.showLoading({
       "mask": true
     })
-    WXAPI.goods({
+    const res = await WXAPI.goods({
       categoryId: categoryId,
-      nameLike: that.data.inputVal,
       page: this.data.curPage,
       pageSize: this.data.pageSize
-    }).then(function(res) {
-      wx.hideLoading()
-      if (res.code == 404 || res.code == 700) {
-        let newData = {
-          loadingMoreHidden: false
-        }
-        if (!append) {
-          newData.goods = []
-        }
-        that.setData(newData);
-        return
-      }
-      let goods = [];
-      if (append) {
-        goods = that.data.goods
-      }
-      for (var i = 0; i < res.data.length; i++) {
-        goods.push(res.data[i]);
-      }
-      that.setData({
-        loadingMoreHidden: true,
-        goods: goods,
-      });
     })
+    wx.hideLoading()
+    if (res.code == 404 || res.code == 700) {
+      let newData = {
+        loadingMoreHidden: false
+      }
+      if (!append) {
+        newData.goods = []
+      }
+      this.setData(newData);
+      return
+    }
+    let goods = [];
+    if (append) {
+      goods = this.data.goods
+    }
+    for (var i = 0; i < res.data.length; i++) {
+      goods.push(res.data[i]);
+    }
+    this.setData({
+      loadingMoreHidden: true,
+      goods: goods,
+    });
   },
   getCoupons: function() {
     var that = this;
@@ -203,7 +238,7 @@ Page({
   },
   onShareAppMessage: function() {    
     return {
-      title: '"' + wx.getStorageSync('mallName') + '" ' + CONFIG.shareProfile,
+      title: '"' + wx.getStorageSync('mallName') + '" ' + wx.getStorageSync('share_profile'),
       path: '/pages/index/index?inviter_id=' + wx.getStorageSync('uid')
     }
   },
@@ -216,12 +251,6 @@ Page({
         });
       }
     })
-  },
-  toSearch: function() {
-    this.setData({
-      curPage: 1
-    });
-    this.getGoodsList(this.data.activeCategoryId);
   },
   onReachBottom: function() {
     this.setData({
@@ -236,42 +265,35 @@ Page({
     this.getGoodsList(this.data.activeCategoryId)
     wx.stopPullDownRefresh()
   },
-  // 以下为搜索框事件
-  showInput: function () {
-    this.setData({
-      inputShowed: true
+  // 获取砍价商品
+  async kanjiaGoods(){
+    const res = await WXAPI.goods({
+      kanjia: true
     });
-  },
-  hideInput: function () {
-    this.setData({
-      inputVal: "",
-      inputShowed: false
-    });
-  },
-  clearInput: function () {
-    this.setData({
-      inputVal: ""
-    });
-  },
-  inputTyping: function (e) {
-    this.setData({
-      inputVal: e.detail.value
-    });
-  },
-  // 以下为砍价业务
-  kanjiaGoods(){
-    const _this = this
-    WXAPI.kanjiaList().then(function (res) {
-      if (res.code == 0) {
-        _this.setData({
-          kanjiaList: res.data.result,
-          kanjiaGoodsMap: res.data.goodsMap
+    if (res.code == 0) {
+      const kanjiaGoodsIds = []
+      res.data.forEach(ele => {
+        kanjiaGoodsIds.push(ele.id)
+      })
+      const goodsKanjiaSetRes = await WXAPI.kanjiaSet(kanjiaGoodsIds.join())
+      if (goodsKanjiaSetRes.code == 0) {
+        res.data.forEach(ele => {
+          const _process = goodsKanjiaSetRes.data.find(_set => {
+            return _set.goodsId == ele.id
+          })
+          if (_process) {
+            ele.process = 100 * _process.numberBuy / _process.number
+            ele.process = ele.process.toFixed(0)
+          }
+        })
+        this.setData({
+          kanjiaList: res.data
         })
       }
-    })
+    }
   },
   goCoupons: function (e) {
-    wx.navigateTo({
+    wx.switchTab({
       url: "/pages/coupons/index"
     })
   },
@@ -285,6 +307,17 @@ Page({
           pingtuanList: res.data
         })
       }
+    })
+  },
+  goSearch(){
+    wx.navigateTo({
+      url: '/pages/search/index'
+    })
+  },
+  goNotice(e) {
+    const id = e.currentTarget.dataset.id
+    wx.navigateTo({
+      url: '/pages/notice/show?id=' + id,
     })
   }
 })

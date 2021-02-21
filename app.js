@@ -1,8 +1,20 @@
-const WXAPI = require('wxapi/main')
+const WXAPI = require('apifm-wxapi')
 const CONFIG = require('config.js')
+const AUTH = require('utils/auth')
 App({
-  navigateToLogin: false,
   onLaunch: function() {
+    const subDomain = wx.getExtConfigSync().subDomain
+    const componentAppid = wx.getExtConfigSync().componentAppid
+    if (componentAppid) {
+      wx.setStorageSync('appid', wx.getAccountInfoSync().miniProgram.appId)
+      wx.setStorageSync('componentAppid', componentAppid)
+    }
+    if (subDomain) {
+      WXAPI.init(subDomain)
+    } else {
+      WXAPI.init(CONFIG.subDomain)
+    }
+    
     const that = this;
     // 检测新版本
     const updateManager = wx.getUpdateManager()
@@ -45,124 +57,64 @@ App({
         wx.showToast({
           title: '网络已断开',
           icon: 'loading',
-          duration: 2000,
-          complete: function() {
-            that.goStartIndexPage()
-          }
+          duration: 2000
         })
       } else {
         that.globalData.isConnected = true
         wx.hideToast()
       }
-    });
-    //  获取接口和后台权限
-    WXAPI.vipLevel().then(res => {
-      that.globalData.vipLevel = res.data
     })
-    //  获取商城名称
-    WXAPI.queryConfigBatch('mallName,recharge_amount_min,ALLOW_SELF_COLLECTION').then(function(res) {
+    WXAPI.queryConfigBatch('mallName,WITHDRAW_MIN,ALLOW_SELF_COLLECTION,order_hx_uids,subscribe_ids,share_profile,adminUserIds,goodsDetailSkuShowType,shopMod,needIdCheck,balance_pay_pwd').then(res => {
       if (res.code == 0) {
         res.data.forEach(config => {
           wx.setStorageSync(config.key, config.value);
-          if (config.key === 'recharge_amount_min') {
-            that.globalData.recharge_amount_min = res.data.value;
-          }
         })
-        
-      }
-    })
-    WXAPI.scoreRules({
-      code: 'goodReputation'
-    }).then(function(res) {
-      if (res.code == 0) {        
-        that.globalData.order_reputation_score = res.data[0].score;
+        if (this.configLoadOK) {
+          this.configLoadOK()
+        }
       }
     })
   },
-  goLoginPageTimeOut: function() {
-    if (this.navigateToLogin){
-      return
-    }
-    wx.removeStorageSync('token')
-    this.navigateToLogin = true
-    setTimeout(function() {
-      wx.navigateTo({
-        url: "/pages/authorize/index"
-      })
-    }, 1000)
-  },
-  goStartIndexPage: function() {
-    setTimeout(function() {
-      wx.redirectTo({
-        url: "/pages/start/start"
-      })
-    }, 1000)
-  },  
+
   onShow (e) {
-    console.log('app.js --- onShow')    
-    this.globalData.launchOption = e
     // 保存邀请人
     if (e && e.query && e.query.inviter_id) {
       wx.setStorageSync('referrer', e.query.inviter_id)
       if (e.shareTicket) {
-        // 通过分享链接进来
         wx.getShareInfo({
           shareTicket: e.shareTicket,
           success: res => {
-            // console.error(res)
-            // console.error({
-            //   referrer: e.query.inviter_id,
-            //   encryptedData: res.encryptedData,
-            //   iv: res.iv
-            // })
-            WXAPI.shareGroupGetScore(
-              e.query.inviter_id,
-              res.encryptedData,
-              res.iv
-            )
+            wx.login({
+              success(loginRes) {
+                if (loginRes.code) {
+                  WXAPI.shareGroupGetScore(
+                    loginRes.code,
+                    e.query.inviter_id,
+                    res.encryptedData,
+                    res.iv
+                  ).then(_res => {
+                    console.log(_res)
+                  }).catch(err => {
+                    console.error(err)
+                  })
+                } else {
+                  console.error('登录失败！' + loginRes.errMsg)
+                }
+              }
+            })
           }
         })
       }
     }
-    this.navigateToLogin = false
-    this.checkLoginStatus()
-  },
-  checkLoginStatus(){ // 检测登录状态
-    const _this = this
-    const token = wx.getStorageSync('token');
-    if (!token) {
-      _this.goLoginPageTimeOut()
-      return
-    }
-    WXAPI.checkToken(token).then(function (res) {
-      if (res.code != 0) {
-        wx.removeStorageSync('token')
-        _this.goLoginPageTimeOut()
-        return
+    // 自动登录
+    AUTH.checkHasLogined().then(isLogined => {
+      if (!isLogined) {
+        AUTH.login()
       }
     })
-    wx.checkSession({
-      fail() {
-        _this.goLoginPageTimeOut()
-        return
-      }
-    })
-    // 已经处于登录状态，检测是否强制需要手机号码
-    if (CONFIG.requireBindMobile) {
-      WXAPI.userDetail(token).then(function (res) {
-        if (res.code == 0) {
-          if (!res.data.base.mobile) {
-            wx.navigateTo({
-              url: "/pages/authorize/bindmobile"
-            })
-          }
-        }
-      })
-    }    
   },
-  globalData: {                
+  globalData: {
     isConnected: true,
-    launchOption: undefined,
-    vipLevel: 0
+    sdkAppID: CONFIG.sdkAppID
   }
 })

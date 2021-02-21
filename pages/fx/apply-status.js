@@ -1,44 +1,41 @@
-const app = getApp()
-const CONFIG = require('../../config.js')
-const WXAPI = require('../../wxapi/main')
-const regeneratorRuntime = require('../../utils/runtime')
-import imageUtil from '../../utils/image'
+const WXAPI = require('apifm-wxapi')
+const AUTH = require('../../utils/auth')
+const ImageUtil = require('../../utils/image')
+const wxpay = require('../../utils/pay.js')
 
 Page({
-
-  /**
-   * 页面的初始数据
-   */
   data: {
+    wxlogin: true,
+
     applyStatus: -2, // -1 表示未申请，0 审核中 1 不通过 2 通过
     applyInfo: {},
-    canvasHeight: 0
-  },
+    canvasHeight: 0,
 
-  /**
-   * 生命周期函数--监听页面加载
-   */
+    currentPages: undefined,
+  },
   onLoad: function (options) {
-
+    this.setting()
   },
-
-  /**
-   * 生命周期函数--监听页面初次渲染完成
-   */
-  onReady: function () {
-
+  onShow() {
+    const _this = this
+    AUTH.checkHasLogined().then(isLogined => {
+      this.setData({
+        wxlogin: isLogined
+      })
+      if (isLogined) {
+        this.doneShow();
+      }
+    })
   },
-
-  /**
-   * 生命周期函数--监听页面显示
-   */
-  async onShow() {
+  async doneShow() {
     const _this = this
     const userDetail = await WXAPI.userDetail(wx.getStorageSync('token'))
     WXAPI.fxApplyProgress(wx.getStorageSync('token')).then(res => {
       let applyStatus = userDetail.data.base.isSeller ? 2 : -1
       if (res.code == 2000) {
-        app.goLoginPageTimeOut()
+        this.setData({
+          wxlogin: false
+        })
         return
       }
       if (res.code === 700) {
@@ -61,6 +58,9 @@ Page({
         _this.fetchQrcode()
       }
     })
+    this.setData({
+      currentPages: getCurrentPages()
+    })
   },
   fetchQrcode(){
     const _this = this
@@ -72,6 +72,7 @@ Page({
       scene: 'inviter_id=' + wx.getStorageSync('uid'),
       page: 'pages/index/index',
       is_hyaline: true,
+      autoColor: true,
       expireHours: 1
     }).then(res => {
       wx.hideLoading()
@@ -86,14 +87,14 @@ Page({
     wx.getImageInfo({
       src: qrcode,
       success: (res) => {
-        const imageSize = imageUtil(res.width, res.height)
+        const imageSize = ImageUtil.imageUtil(res.width, res.height)
         const qrcodeWidth = imageSize.windowWidth / 2
         _this.setData({
           canvasHeight: qrcodeWidth
         })
         ctx = wx.createCanvasContext('firstCanvas')
-        // ctx.setFillStyle('#fff')
-        // ctx.fillRect(0, 0, imageSize.windowWidth, imageSize.imageHeight + additionHeight + qrcodeWidth)
+        ctx.setFillStyle('#fff')
+        ctx.fillRect(0, 0, imageSize.windowWidth, imageSize.imageHeight + qrcodeWidth)
         ctx.drawImage(res.path, (imageSize.windowWidth - qrcodeWidth) / 2, 0, qrcodeWidth, qrcodeWidth)
         setTimeout(function () {
           wx.hideLoading()
@@ -102,40 +103,9 @@ Page({
       }
     })
   },
-  /**
-   * 生命周期函数--监听页面隐藏
-   */
-  onHide: function () {
-
-  },
-
-  /**
-   * 生命周期函数--监听页面卸载
-   */
-  onUnload: function () {
-
-  },
-
-  /**
-   * 页面相关事件处理函数--监听用户下拉动作
-   */
-  onPullDownRefresh: function () {
-
-  },
-
-  /**
-   * 页面上拉触底事件的处理函数
-   */
-  onReachBottom: function () {
-
-  },
-
-  /**
-   * 用户点击右上角分享
-   */
-  onShareAppMessage: function () {
+  onShareAppMessage() {    
     return {
-      title: '"' + wx.getStorageSync('mallName') + '" ' + CONFIG.shareProfile,
+      title: '"' + wx.getStorageSync('mallName') + '" ' + wx.getStorageSync('share_profile'),
       path: '/pages/index/index?inviter_id=' + wx.getStorageSync('uid'),
       success: function (res) {
         // 转发成功
@@ -146,21 +116,11 @@ Page({
     }
   },
   bindSave: function (e) {
-    WXAPI.addTempleMsgFormid({
-      token: wx.getStorageSync('token'),
-      type: 'form',
-      formId: e.detail.formId
-    })
     wx.navigateTo({
       url: "/pages/fx/apply"
     })
   },
   goShop: function (e) {
-    WXAPI.addTempleMsgFormid({
-      token: wx.getStorageSync('token'),
-      type: 'form',
-      formId: e.detail.formId
-    })
     wx.switchTab({
       url: '/pages/index/index',
     })
@@ -190,5 +150,65 @@ Page({
         })
       }
     })
+  },
+  goIndex() {
+    wx.switchTab({
+      url: '/pages/index/index',
+    });
+  },
+  cancelLogin() {
+    wx.switchTab({
+      url: '/pages/my/index'
+    })
+  },
+  processLogin(e) {
+    if (!e.detail.userInfo) {
+      wx.showToast({
+        title: '已取消',
+        icon: 'none',
+      })
+      return;
+    }
+    AUTH.register(this);
+  },
+  async setting() {
+    const res = await WXAPI.fxSetting()
+    if (res.code == 0) {
+      this.setData({
+        setting: res.data
+      })
+    }
+  },
+  async buy() {
+    const token = wx.getStorageSync('token')
+    let res = await WXAPI.userAmount(token)
+    if (res.code != 0) {
+      wx.showToast({
+        title: res.msg,
+        icon: 'none'
+      })
+      return
+    }
+    if (res.data.balance >= this.data.setting.price) {
+      // 余额足够
+      res = await WXAPI.fxBuy(token)
+      if (res.code != 0) {
+        wx.showToast({
+          title: res.msg,
+          icon: 'none'
+        })
+        return
+      }
+      wx.showToast({
+        title: '升级成功',
+      })
+      setTimeout(() => {
+        this.doneShow();
+      }, 1000);
+    } else {
+      let price = this.data.setting.price - res.data.balance
+      price = price.toFixed(2)
+      wxpay.wxpay('fxsBuy', price, 0, "/pages/fx/apply-status");
+    }
   }
 })

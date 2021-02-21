@@ -1,3 +1,5 @@
+@import "/template/login/index.wxss";
+
 .noApply {
   margin-top: 150rpx;
   text-align: center;
@@ -21,4 +23,7 @@
 }
 .canvas {
   width:750rpx;
+}
+.block-btn {
+  padding: 8rpx 32rpx;
 }

@@ -1,5 +1,6 @@
 const app = getApp()
-const WXAPI = require('../../wxapi/main')
+const WXAPI = require('apifm-wxapi')
+const AUTH = require('../../utils/auth')
 
 var sliderWidth = 96; // 需要设置slider的宽度，用于计算中间位置
 
@@ -9,6 +10,7 @@ Page({
    * 页面的初始数据
    */
   data: {
+    wxlogin: true,
     balance: 0.00,
     freeze: 0,
     score: 0,
@@ -22,6 +24,8 @@ Page({
 
     withDrawlogs: undefined,
     depositlogs: undefined,
+
+    rechargeOpen: false // 是否开启充值[预存]功能
   },
 
   /**
@@ -50,10 +54,22 @@ Page({
    * 生命周期函数--监听页面显示
    */
   onShow: function () {
+    AUTH.checkHasLogined().then(isLogined => {
+      this.setData({
+        wxlogin: isLogined
+      })
+      if (isLogined) {
+        this.doneShow();
+      }
+    })
+  },
+  doneShow: function () {
     const _this = this
     const token = wx.getStorageSync('token')
     if (!token) {
-      app.goLoginPageTimeOut()
+      this.setData({
+        wxlogin: false
+      })
       return
     }
     WXAPI.userAmount(token).then(function (res) {
@@ -65,7 +81,9 @@ Page({
         return
       }
       if (res.code == 2000) {
-        app.goLoginPageTimeOut()
+        this.setData({
+          wxlogin: false
+        })
         return
       }
       if (res.code == 0) {
@@ -92,14 +110,14 @@ Page({
   },
   cashLogs() {
     const _this = this
-    WXAPI.cashLogs({
+    WXAPI.cashLogsV2({
       token: wx.getStorageSync('token'),
       page:1,
       pageSize:50
     }).then(res => {
       if (res.code == 0) {
         _this.setData({
-          cashlogs: res.data
+          cashlogs: res.data.result
         })
       }
     })
@@ -133,67 +151,17 @@ Page({
     })
   },
 
-  /**
-   * 生命周期函数--监听页面隐藏
-   */
-  onHide: function () {
-
-  },
-
-  /**
-   * 生命周期函数--监听页面卸载
-   */
-  onUnload: function () {
-
-  },
-
-  /**
-   * 页面相关事件处理函数--监听用户下拉动作
-   */
-  onPullDownRefresh: function () {
-
-  },
-
-  /**
-   * 页面上拉触底事件的处理函数
-   */
-  onReachBottom: function () {
-
-  },
-
-  /**
-   * 用户点击右上角分享
-   */
-  onShareAppMessage: function () {
-
-  },
-
   recharge: function (e) {
-    WXAPI.addTempleMsgFormid({
-      token: wx.getStorageSync('token'),
-      type: 'form',
-      formId: e.detail.formId
-    })
     wx.navigateTo({
       url: "/pages/recharge/index"
     })
   },
   withdraw: function (e) {
-    WXAPI.addTempleMsgFormid({
-      token: wx.getStorageSync('token'),
-      type: 'form',
-      formId: e.detail.formId
-    })
     wx.navigateTo({
       url: "/pages/withdraw/index"
     })
   },
   payDeposit: function (e) {
-    WXAPI.addTempleMsgFormid({
-      token: wx.getStorageSync('token'),
-      type: 'form',
-      formId: e.detail.formId
-    })
     wx.navigateTo({
       url: "/pages/deposit/pay"
     })
@@ -204,5 +172,20 @@ Page({
       activeIndex: e.currentTarget.id
     });
     this.fetchTabData(e.currentTarget.id)
-  }
+  },
+  cancelLogin(){
+    wx.switchTab({
+      url: '/pages/my/index'
+    })
+  },
+  processLogin(e){
+    if (!e.detail.userInfo) {
+      wx.showToast({
+        title: '已取消',
+        icon: 'none',
+      })
+      return;
+    }
+    AUTH.register(this);
+  },
 })
