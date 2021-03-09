@@ -16,31 +16,33 @@ Page({
     goodsRecommend: [], // 推荐商品
     kanjiaList: [], //砍价商品列表
     pingtuanList: [], //拼团商品列表
-
     loadingHidden: false, // loading
     selectCurrent: 0,
     categories: [],
     activeCategoryId: 0,
     goods: [],
-    
     scrollTop: 0,
     loadingMoreHidden: true,
-
     coupons: [],
-
     curPage: 1,
     pageSize: 20,
     cateScrollTop: 0
   },
 
   tabClick: function(e) {
-    wx.setStorageSync("_categoryId", e.currentTarget.dataset.id)
-    wx.switchTab({
-      url: '/pages/category/category',
+    const category = this.data.categories.find(ele => {
+      return ele.id == e.currentTarget.dataset.id
     })
-    // wx.navigateTo({
-    //   url: '/pages/goods/list?categoryId=' + e.currentTarget.id,
-    // })
+    if (category.vopCid1 || category.vopCid2) {
+      wx.navigateTo({
+        url: '/pages/goods/list-vop?cid1=' + (category.vopCid1 ? category.vopCid1 : '') + '&cid2=' + (category.vopCid2 ? category.vopCid2 : ''),
+      })
+    } else {
+      wx.setStorageSync("_categoryId", category.id)
+      wx.switchTab({
+        url: '/pages/category/category',
+      })
+    }
   },
   toDetailsTap: function(e) {
     wx.navigateTo({
@@ -70,7 +72,10 @@ Page({
   },
   onLoad: function(e) {
     wx.showShareMenu({
-      withShareTicket: true
+      withShareTicket: true,
+    })
+    this.setData({
+      mallName:wx.getStorageSync('mallName')?wx.getStorageSync('mallName'):''
     })
     const that = this
     // 读取分享链接中的邀请人编号
@@ -90,7 +95,7 @@ Page({
     })
     wx.setNavigationBarTitle({
       title: wx.getStorageSync('mallName')
-    })
+    })    
     this.initBanners()
     this.categories()
     WXAPI.goods({
@@ -106,7 +111,8 @@ Page({
     that.getNotice()
     that.kanjiaGoods()
     that.pingtuanGoods()
-    this.wxaMpLiveRooms()    
+    this.wxaMpLiveRooms()
+    this.adPosition()
   },
   async miaoshaGoods(){
     const res = await WXAPI.goods({
@@ -153,6 +159,15 @@ Page({
     this.setData(_data)
   },
   onShow: function(e){
+    console.log("App.globalData.navHeight", APP.globalData.navHeight)
+    console.log("App.globalData.navTop", APP.globalData.navTop)
+    console.log("App.globalData.windowHeight", APP.globalData.windowHeight)
+    this.setData({
+      navHeight: APP.globalData.navHeight,
+      navTop: APP.globalData.navTop,
+      windowHeight: APP.globalData.windowHeight,
+      menuButtonObject: APP.globalData.menuButtonObject //小程序胶囊信息
+    })
     this.setData({
       shopInfo: wx.getStorageSync('shopInfo')
     })
@@ -318,6 +333,22 @@ Page({
     const id = e.currentTarget.dataset.id
     wx.navigateTo({
       url: '/pages/notice/show?id=' + id,
+    })
+  },
+  async adPosition() {
+    const res = await WXAPI.adPosition('index-live-pic')
+    if (res.code == 0) {
+      this.setData({
+        adPositionIndexLivePic: res.data
+      })
+    }
+  },
+  clickAdPositionIndexLive() {
+    if (!this.data.adPositionIndexLivePic || !this.data.adPositionIndexLivePic.url) {
+      return
+    }
+    wx.navigateTo({
+      url: this.data.adPositionIndexLivePic.url,
     })
   }
 })

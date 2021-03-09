@@ -30,12 +30,10 @@
       <view class="amount">{{score}}</view>
       <view>积分</view>
     </view>
-    <navigator url="/pages/score/growth">
-      <view class='item right'>
-        <view class="amount">{{growth}}</view>
-        <view>成长值</view>
-      </view>
-    </navigator>
+    <view class='item right' bindtap="gogrowth">
+      <view class="amount">{{growth}}</view>
+      <view>成长值</view>
+    </view>
   </view>
   <view class="space van-hairline--bottom"></view>
   <van-cell title="我的订单" value="更多" is-link url="/pages/order-list/index" />
@@ -48,7 +46,7 @@
   </van-grid>
   <van-cell title="常用功能" />
   <van-grid clickable>
-    <van-grid-item wx:if="{{!canHX}}" icon="scan" text="扫码核销" bind:click="scanOrderCode" />
+    <van-grid-item wx:if="{{canHX}}" icon="scan" text="扫码核销" bind:click="scanOrderCode" />
     <van-grid-item icon="paid" text="优惠买单" url="/pages/maidan/index" />
     <van-grid-item icon="balance-list-o" text="资金明细" url="/pages/asset/index" />
     <van-grid-item icon="bill-o" text="申请发票" url="/pages/invoice/apply" />
