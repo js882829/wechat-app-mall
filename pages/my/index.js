@@ -28,7 +28,6 @@ Page({
     userInfoStatus: 0 // 0 未读取 1 没有详细信息 2 有详细信息
   },
 	onLoad() {
-
 	},
   onShow() {
     const _this = this
@@ -45,6 +44,7 @@ Page({
         TOOLS.showTabBarBadge();
       } else {
         AUTH.authorize().then(res => {
+          AUTH.bindSeller()
           _this.getUserApiInfo();
           _this.getUserAmount();
           _this.orderStatistics();
