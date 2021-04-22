@@ -144,6 +144,18 @@
         {
           "name": "packageCps/pages/goods-details/cps-taobao",
           "pathName": "packageCps/pages/goods-details/cps-taobao",
+          "query": "",
+          "scene": null
+        },
+        {
+          "name": "pages/coupons/index",
+          "pathName": "pages/coupons/index",
+          "query": "",
+          "scene": null
+        },
+        {
+          "name": "demos/pages/echarts/line",
+          "pathName": "demos/pages/echarts/line",
           "scene": null
         }
       ]
