@@ -83,7 +83,12 @@
       "root": "demos",
       "name": "demos",
       "pages": [
-        "pages/echarts/line"
+        "pages/echarts/line",
+        "pages/business/index",
+        "pages/bind-phone/index",
+        "pages/merchant/index",
+        "pages/record-list/index",
+        "pages/ab/index"
       ]
     }
   ],
@@ -162,6 +167,7 @@
     "van-goods-action-icon": "@vant/weapp/goods-action-icon/index",
     "van-goods-action-button": "@vant/weapp/goods-action-button/index",
     "van-popup": "@vant/weapp/popup/index",
+    "van-picker": "@vant/weapp/picker/index",
     "van-stepper": "@vant/weapp/stepper/index",
     "van-sticky": "@vant/weapp/sticky/index",
     "van-dialog": "@vant/weapp/dialog/index",
@@ -175,7 +181,9 @@
     "van-image": "@vant/weapp/image/index",
     "van-tab": "@vant/weapp/tab/index",
     "van-tabs": "@vant/weapp/tabs/index",
-    "van-overlay": "@vant/weapp/overlay/index"
+    "van-overlay": "@vant/weapp/overlay/index",
+    "van-datetime-picker": "@vant/weapp/datetime-picker/index",
+    "van-area": "@vant/weapp/area/index"
   },
   "sitemapLocation": "sitemap.json"
 }
